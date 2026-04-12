@@ -1,0 +1,101 @@
+id: iserv
+class: tool
+image: selu-cap-iserv:latest
+
+tools:
+  - name: check_parent_letters
+    description: >-
+      Fetches the list of parent letters (Elternbriefe) from IServ.
+      Returns title, date, read status, confirmation requirement, and href for each letter.
+    input_schema:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: Maximum number of letters to return (default 20)
+        offset:
+          type: integer
+          description: Number of letters to skip for pagination (default 0)
+        unread_only:
+          type: boolean
+          description: If true, return only unread letters (default false)
+      required: []
+    recommended_policy: allow
+
+  - name: get_parent_letter
+    description: >-
+      Retrieves the full content of a specific parent letter by its href.
+      Returns the letter body as text, attachment metadata, and whether a read confirmation is required.
+    input_schema:
+      type: object
+      properties:
+        href:
+          type: string
+          description: The relative URL path of the parent letter (from check_parent_letters results)
+      required:
+        - href
+    recommended_policy: allow
+
+  - name: confirm_parent_letter
+    description: >-
+      Sends a read confirmation for a parent letter that requires acknowledgement.
+      This action is irreversible.
+    input_schema:
+      type: object
+      properties:
+        href:
+          type: string
+          description: The relative URL path of the parent letter to confirm
+      required:
+        - href
+    recommended_policy: ask
+
+  - name: download_attachment
+    description: >-
+      Downloads a file attachment from a parent letter.
+      The file is made available as an output artifact for the user to download.
+    input_schema:
+      type: object
+      properties:
+        attachment_href:
+          type: string
+          description: The relative URL path of the attachment to download
+      required:
+        - attachment_href
+    recommended_policy: allow
+
+  - name: check_notifications
+    description: >-
+      Fetches recent notifications from IServ.
+      Returns title, date, type, and read status for each notification.
+    input_schema:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: Maximum number of notifications to return (default 20)
+      required: []
+    recommended_policy: allow
+
+network:
+  mode: allowlist
+  allow:
+    - mags-greven.de:443
+
+filesystem: temp
+
+credentials:
+  - name: USERNAME
+    scope: user
+    required: true
+    description: IServ username or email address
+  - name: PASSWORD
+    scope: user
+    required: true
+    description: IServ account password
+
+resources:
+  max_memory: 128m
+  max_cpu: 0.5
+  max_cpu_seconds: 30
+  pids_limit: 64
