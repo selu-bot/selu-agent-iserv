@@ -78,13 +78,15 @@ tools:
     recommended_policy: allow
 
 network:
-  mode: allowlist
-  allow:
-    - mags-greven.de:443
+  mode: any
 
 filesystem: temp
 
 credentials:
+  - name: ISERV_BASE_URL
+    scope: system
+    required: false
+    description: IServ base URL for your school (default: https://mags-greven.de)
   - name: USERNAME
     scope: user
     required: true

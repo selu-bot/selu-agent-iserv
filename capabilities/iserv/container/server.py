@@ -45,10 +45,12 @@ class CapabilityState:
         with self._lock:
             username = config.get("USERNAME")
             password = config.get("PASSWORD")
+            base_url = config.get("ISERV_BASE_URL")
             if not username or not password:
                 return {"error": "IServ credentials (USERNAME, PASSWORD) are required."}
 
             self._client.set_credentials(username, password)
+            self._client.set_base_url(base_url)
 
             if tool_name == "check_parent_letters":
                 return self._client.get_parent_letters(

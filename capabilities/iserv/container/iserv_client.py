@@ -4,6 +4,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from urllib.parse import urlparse
 from typing import Any
 
 import requests
@@ -11,7 +12,7 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://mags-greven.de"
+DEFAULT_BASE_URL = "https://mags-greven.de"
 SESSION_MAX_AGE_SECONDS = 15 * 60
 
 
@@ -35,6 +36,7 @@ class IServClient:
         self.session.headers["User-Agent"] = "Selu IServ Capability/1.0"
         self._credentials: LoginCredentials | None = None
         self._authenticated_at: float | None = None
+        self._base_url = DEFAULT_BASE_URL
 
     def set_credentials(self, username: str, password: str) -> None:
         creds = LoginCredentials(username=username, password=password)
@@ -42,6 +44,27 @@ class IServClient:
             self.session.cookies.clear()
             self._authenticated_at = None
             self._credentials = creds
+
+    def set_base_url(self, base_url: str | None) -> None:
+        normalized_url = self._normalize_base_url(base_url)
+        if normalized_url != self._base_url:
+            self.session.cookies.clear()
+            self._authenticated_at = None
+            self._base_url = normalized_url
+
+    @staticmethod
+    def _normalize_base_url(base_url: str | None) -> str:
+        raw = (base_url or DEFAULT_BASE_URL).strip()
+        if not raw:
+            raw = DEFAULT_BASE_URL
+        if "://" not in raw:
+            raw = f"https://{raw}"
+        parsed = urlparse(raw)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise IServError(
+                "Invalid ISERV_BASE_URL. Use a full host like https://schule.example.de"
+            )
+        return raw.rstrip("/")
 
     def is_authenticated(self) -> bool:
         if self._authenticated_at is None:
@@ -62,7 +85,7 @@ class IServClient:
         logger.info("Authenticating to IServ as %s", self._credentials.username)
 
         # GET the login page to pick up session cookies and check for CSRF token
-        resp = self.session.get(f"{BASE_URL}/iserv/auth/login", timeout=20)
+        resp = self.session.get(f"{self._base_url}/iserv/auth/login", timeout=20)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
 
@@ -85,7 +108,7 @@ class IServClient:
                     form_data[name] = hidden.get("value", "")
 
         login_resp = self.session.post(
-            f"{BASE_URL}/iserv/auth/login",
+            f"{self._base_url}/iserv/auth/login",
             data=form_data,
             timeout=20,
             allow_redirects=True,
@@ -104,7 +127,7 @@ class IServClient:
 
     def _get_page(self, path: str, retry: bool = True) -> BeautifulSoup:
         self._ensure_auth()
-        url = path if path.startswith("http") else f"{BASE_URL}{path}"
+        url = path if path.startswith("http") else f"{self._base_url}{path}"
         try:
             resp = self.session.get(url, timeout=20)
             resp.raise_for_status()
@@ -121,7 +144,7 @@ class IServClient:
 
     def _post_page(self, path: str, data: dict, retry: bool = True) -> BeautifulSoup:
         self._ensure_auth()
-        url = path if path.startswith("http") else f"{BASE_URL}{path}"
+        url = path if path.startswith("http") else f"{self._base_url}{path}"
         try:
             resp = self.session.post(url, data=data, timeout=20, allow_redirects=True)
             resp.raise_for_status()
@@ -296,7 +319,7 @@ class IServClient:
         url = (
             attachment_href
             if attachment_href.startswith("http")
-            else f"{BASE_URL}{attachment_href}"
+            else f"{self._base_url}{attachment_href}"
         )
         resp = self.session.get(url, timeout=30, stream=True)
         resp.raise_for_status()

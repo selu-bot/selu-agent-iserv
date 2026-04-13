@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "capabilities",
 
 from iserv_client import (
     AuthenticationError,
+    DEFAULT_BASE_URL,
     IServClient,
     IServError,
     SESSION_MAX_AGE_SECONDS,
@@ -231,6 +232,26 @@ class TestSessionManagement:
         client = IServClient()
         with pytest.raises(AuthenticationError, match="Missing"):
             client.login()
+
+    def test_set_base_url_normalizes_and_clears_session(self):
+        client = IServClient()
+        client._authenticated_at = time.time()
+        client.set_base_url("schule.example.de/")
+
+        assert client._base_url == "https://schule.example.de"
+        assert client._authenticated_at is None
+
+    def test_set_same_base_url_keeps_session(self):
+        client = IServClient()
+        client._authenticated_at = time.time()
+        client.set_base_url(DEFAULT_BASE_URL)
+
+        assert client._authenticated_at is not None
+
+    def test_set_base_url_rejects_invalid_value(self):
+        client = IServClient()
+        with pytest.raises(IServError, match="Invalid ISERV_BASE_URL"):
+            client.set_base_url("https:///broken")
 
 
 class TestConfirmParentLetter:
