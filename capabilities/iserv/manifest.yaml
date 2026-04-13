@@ -87,7 +87,6 @@ filesystem: temp
 credentials:
   - name: ISERV_BASE_URL
     scope: system
-    credential_type: text
     required: false
     description: IServ base URL for your school (default: https://mags-greven.de)
   - name: USERNAME
