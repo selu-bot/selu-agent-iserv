@@ -2,25 +2,25 @@ agent:
   name: IServ Schulassistent
   description: Hilft dir, bei Elternbriefen und Benachrichtigungen der Schule auf dem Laufenden zu bleiben
   long_description: >-
-    Prueft neue Elternbriefe aus IServ, liest deren Inhalt, sendet Lesebestaetigungen,
-    laedt Anhaenge herunter und zeigt Schulbenachrichtigungen an.
+    Prüft neue Elternbriefe aus IServ, liest deren Inhalt, sendet Lesebestätigungen,
+    lädt Anhänge herunter und zeigt Schulbenachrichtigungen an.
 
 tools:
   iserv__check_parent_letters:
-    label: Elternbriefe pruefen
+    label: Elternbriefe prüfen
     description: Liste der Elternbriefe aus der Schule abrufen
   iserv__get_parent_letter:
     label: Elternbrief lesen
-    description: Den vollstaendigen Inhalt eines bestimmten Elternbriefes lesen
+    description: Den vollständigen Inhalt eines bestimmten Elternbriefes lesen
   iserv__confirm_parent_letter:
-    label: Elternbrief bestaetigen
-    description: Lesebestaetigung fuer einen Elternbrief senden
+    label: Elternbrief bestätigen
+    description: Lesebestätigung für einen Elternbrief senden
     approval:
-      label: Empfang bestaetigen
-      message: "Lesebestaetigung fuer diesen Elternbrief senden? Dies kann nicht rueckgaengig gemacht werden."
+      label: Empfang bestätigen
+      message: "Lesebestätigung für diesen Elternbrief senden? Dies kann nicht rückgängig gemacht werden."
   iserv__download_attachment:
     label: Anhang herunterladen
     description: Einen Dateianhang aus einem Elternbrief herunterladen
   iserv__check_notifications:
-    label: Benachrichtigungen pruefen
+    label: Benachrichtigungen prüfen
     description: Aktuelle Benachrichtigungen aus IServ abrufen

@@ -1,44 +1,44 @@
-# IServ Capability — Tool Reference
+# IServ-Fähigkeit — Werkzeug-Referenz
 
-## Tools
+## Werkzeuge
 
 ### `iserv__check_parent_letters`
-Fetches the parent letter list. Returns an array of letters with `title`, `date`, `date_sort`, `read`, `needs_confirmation`, and `href`.
+Ruft die Elternbrief-Liste ab. Gibt ein Array von Briefen mit `title`, `date`, `date_sort`, `read`, `needs_confirmation` und `href` zurück.
 
-- Default: most recent 20 letters, sorted newest first
-- Use `unread_only: true` to filter to unread letters only
-- Use `offset` for pagination through older letters
+- Standard: die neuesten 20 Briefe, neueste zuerst
+- Nutze `unread_only: true`, um nur ungelesene Briefe zu filtern
+- Nutze `offset` zur Paginierung durch ältere Briefe
 
 ### `iserv__get_parent_letter`
-Reads the full content of one parent letter.
+Liest den vollständigen Inhalt eines Elternbriefes.
 
-- Pass the `href` from the letter list result
-- Returns `body_text` (cleaned content), `body_html` (raw HTML), `attachments` (list with `filename`, `href`, `size`), and `needs_confirmation` (boolean)
-- If the letter has attachments, list them for the user and offer to download
-- If `needs_confirmation` is true, inform the user
+- Übergib den `href` aus dem Ergebnis der Briefliste
+- Gibt `body_text` (bereinigter Inhalt), `body_html` (rohes HTML), `attachments` (Liste mit `filename`, `href`, `size`) und `needs_confirmation` (Boolean) zurück
+- Wenn der Brief Anhänge hat, liste sie für den Nutzer auf und biete den Download an
+- Wenn `needs_confirmation` wahr ist, informiere den Nutzer
 
 ### `iserv__confirm_parent_letter`
-Sends the read confirmation for a parent letter. Only call this after the user has explicitly approved.
+Sendet die Lesebestätigung für einen Elternbrief. Rufe dies nur auf, nachdem der Nutzer ausdrücklich zugestimmt hat.
 
-- Pass the `href` of the letter
-- Returns `confirmed: true` on success
+- Übergib den `href` des Briefes
+- Gibt `confirmed: true` bei Erfolg zurück
 
 ### `iserv__download_attachment`
-Downloads a file attachment and makes it available for the user.
+Lädt einen Dateianhang herunter und stellt ihn dem Nutzer zur Verfügung.
 
-- Pass `attachment_href` from the letter's attachments list
-- Returns `artifact` with `capability_artifact_id`, `filename`, and `mime_type`
-- The orchestrator will handle delivery to the user
+- Übergib `attachment_href` aus der Anhang-Liste des Briefes
+- Gibt `artifact` mit `capability_artifact_id`, `filename` und `mime_type` zurück
+- Der Orchestrator übernimmt die Zustellung an den Nutzer
 
 ### `iserv__check_notifications`
-Fetches recent IServ notifications.
+Ruft aktuelle IServ-Benachrichtigungen ab.
 
-- Returns an array with `title`, `date`, `type`, and `read` for each notification
-- Present in reverse chronological order
+- Gibt ein Array mit `title`, `date`, `type` und `read` für jede Benachrichtigung zurück
+- In umgekehrt chronologischer Reihenfolge darstellen
 
-## Guidelines
+## Richtlinien
 
-- Always use `store_get("last_parentletter_check")` before checking letters to provide context on what's new
-- After checking, update with `store_set("last_parentletter_check", current_datetime)`
-- Never show raw hrefs or HTML to the user — present content in clean, readable format
-- Confirm before any irreversible action (read confirmations)
+- Verwende immer `store_get("last_parentletter_check")` vor dem Prüfen der Briefe, um Kontext zu liefern, was neu ist
+- Aktualisiere danach mit `store_set("last_parentletter_check", aktuelles_datum_uhrzeit)`
+- Zeige dem Nutzer niemals rohe hrefs oder HTML — stelle Inhalte in sauberem, lesbarem Format dar
+- Bestätige vor jeder irreversiblen Aktion (Lesebestätigungen)

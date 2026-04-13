@@ -4,7 +4,6 @@ i18n:
   default_locale: de
   supported_locales:
     - de
-    - en
 routing: inline
 session:
   trigger: mention
