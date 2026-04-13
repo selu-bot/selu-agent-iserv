@@ -88,7 +88,7 @@ credentials:
   - name: ISERV_BASE_URL
     scope: system
     required: false
-    description: IServ base URL for your school (default: https://mags-greven.de)
+    description: "IServ base URL for your school (default: https://mags-greven.de)"
   - name: USERNAME
     scope: user
     required: true
