@@ -78,13 +78,16 @@ tools:
     recommended_policy: allow
 
 network:
-  mode: any
+  mode: allowlist
+  hosts:
+    - "mags-greven.de:443"
 
 filesystem: temp
 
 credentials:
   - name: ISERV_BASE_URL
     scope: system
+    credential_type: text
     required: false
     description: IServ base URL for your school (default: https://mags-greven.de)
   - name: USERNAME
@@ -97,7 +100,7 @@ credentials:
     description: IServ account password
 
 resources:
-  max_memory: 128m
-  max_cpu: 0.5
+  max_memory_mb: 128
+  max_cpu_fraction: 0.5
   max_cpu_seconds: 30
   pids_limit: 64
