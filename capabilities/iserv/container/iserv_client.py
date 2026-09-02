@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from html import unescape
 from io import BytesIO
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
@@ -121,12 +122,55 @@ class IServClient:
             allow_redirects=True,
         )
         login_resp.raise_for_status()
+        login_resp = self._follow_iserv_auth_redirect(login_resp)
 
         if "/iserv/auth/login" in login_resp.url:
             raise AuthenticationError("Login failed — check username and password")
 
         self._authenticated_at = time.time()
         logger.info("Authentication successful")
+
+    def _follow_iserv_auth_redirect(
+        self,
+        response: requests.Response,
+        *,
+        stream: bool = False,
+    ) -> requests.Response:
+        """Follow IServ's HTML meta-refresh authentication bridge.
+
+        The IServ app gateway responds with HTTP 200 at /iserv/auth/auth and a
+        meta refresh. Browsers follow it automatically; requests does not.
+        """
+        for _ in range(3):
+            if urlparse(response.url).path != "/iserv/auth/auth":
+                return response
+
+            soup = BeautifulSoup(response.text, "lxml")
+            refresh = soup.select_one('meta[http-equiv="refresh" i]')
+            content = refresh.get("content", "") if refresh else ""
+            match = re.search(r"(?:^|;)\s*url\s*=\s*(.+)\s*$", content, re.I)
+            if not match:
+                raise AuthenticationError(
+                    "IServ authentication redirect did not contain a target URL"
+                )
+
+            target = unescape(match.group(1).strip().strip("\"'"))
+            target_url = urljoin(response.url, target)
+            parsed_target = urlparse(target_url)
+            parsed_base = urlparse(self._base_url)
+            if (
+                parsed_target.scheme != parsed_base.scheme
+                or parsed_target.netloc != parsed_base.netloc
+            ):
+                raise AuthenticationError(
+                    "IServ authentication redirect targeted a different host"
+                )
+
+            response.close()
+            response = self.session.get(target_url, timeout=20, stream=stream)
+            response.raise_for_status()
+
+        raise AuthenticationError("Too many IServ authentication redirects")
 
     def _ensure_auth(self) -> None:
         if not self.is_authenticated():
@@ -138,6 +182,7 @@ class IServClient:
         try:
             resp = self.session.get(url, timeout=20)
             resp.raise_for_status()
+            resp = self._follow_iserv_auth_redirect(resp)
             if "/iserv/auth/login" in resp.url:
                 raise AuthenticationError("Session expired")
             return BeautifulSoup(resp.text, "lxml")
@@ -155,6 +200,7 @@ class IServClient:
         try:
             resp = self.session.post(url, data=data, timeout=20, allow_redirects=True)
             resp.raise_for_status()
+            resp = self._follow_iserv_auth_redirect(resp)
             if "/iserv/auth/login" in resp.url:
                 raise AuthenticationError("Session expired")
             return BeautifulSoup(resp.text, "lxml")
@@ -329,6 +375,9 @@ class IServClient:
 
         resp = self.session.get(url, timeout=30, stream=True)
         resp.raise_for_status()
+        resp = self._follow_iserv_auth_redirect(resp, stream=True)
+        if "/iserv/auth/login" in resp.url:
+            raise AuthenticationError("Session expired")
 
         content_length = resp.headers.get("Content-Length")
         if content_length:

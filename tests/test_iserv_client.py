@@ -7,6 +7,7 @@ from io import BytesIO
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 from pypdf import PdfWriter
 
 import sys, os
@@ -254,6 +255,41 @@ class TestSessionManagement:
         client = IServClient()
         with pytest.raises(IServError, match="Invalid ISERV_BASE_URL"):
             client.set_base_url("https:///broken")
+
+    def test_follows_iserv_meta_auth_redirect(self):
+        client = IServClient()
+        bridge = requests.Response()
+        bridge.status_code = 200
+        bridge.url = "https://mags-greven.de/iserv/auth/auth"
+        bridge._content = (
+            b'<html><head><meta http-equiv="refresh" '
+            b'content="0;url=https://mags-greven.de/iserv/app/authentication/redirect?state=x&amp;code=y">'
+            b'</head></html>'
+        )
+        destination = requests.Response()
+        destination.status_code = 200
+        destination.url = "https://mags-greven.de/iserv/parentletter/parent/index"
+        destination._content = b"<html></html>"
+        client.session.get = MagicMock(return_value=destination)
+
+        result = client._follow_iserv_auth_redirect(bridge)
+
+        assert result is destination
+        requested_url = client.session.get.call_args.args[0]
+        assert requested_url.endswith("?state=x&code=y")
+
+    def test_rejects_cross_host_meta_auth_redirect(self):
+        client = IServClient()
+        bridge = requests.Response()
+        bridge.status_code = 200
+        bridge.url = "https://mags-greven.de/iserv/auth/auth"
+        bridge._content = (
+            b'<meta http-equiv="refresh" '
+            b'content="0;url=https://example.com/steal">'
+        )
+
+        with pytest.raises(AuthenticationError, match="different host"):
+            client._follow_iserv_auth_redirect(bridge)
 
 
 class TestConfirmParentLetter:
