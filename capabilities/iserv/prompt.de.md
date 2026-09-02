@@ -30,6 +30,16 @@ Lädt einen Dateianhang herunter und stellt ihn dem Nutzer zur Verfügung.
 - Gibt `artifact` mit `capability_artifact_id`, `filename` und `mime_type` zurück
 - Der Orchestrator übernimmt die Zustellung an den Nutzer
 
+### `iserv__parse_pdf_attachment`
+Lädt einen PDF-Anhang und extrahiert den Text seitenweise direkt in der IServ-Fähigkeit.
+
+- Übergib `attachment_href` aus der Anhang-Liste des Briefes
+- Nutze dieses Werkzeug für Fragen, Zusammenfassungen, Termine oder Aufgaben aus einem PDF
+- Nutze `pages` für Seitenbezüge und `text` für die Gesamtauswertung
+- Weise auf `text_truncated: true` hin
+- Wenn `has_extractable_text` falsch ist, erkläre, dass das PDF vermutlich nur Scans/Bilder enthält und keine OCR verfügbar ist
+- Das Werkzeug setzt keine optionale PDF-Skill-Installation voraus
+
 ### `iserv__check_notifications`
 Ruft aktuelle IServ-Benachrichtigungen ab.
 

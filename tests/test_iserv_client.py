@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import time
+from io import BytesIO
 from unittest.mock import MagicMock
 
 import pytest
+from pypdf import PdfWriter
 
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "capabilities", "iserv", "container"))
@@ -322,3 +324,44 @@ class TestGetParentLettersFiltering:
         result = client.get_parent_letters(offset=100)
         assert result["returned"] == 0
         assert result["letters"] == []
+
+
+class TestParsePdfAttachment:
+    @staticmethod
+    def _blank_pdf() -> bytes:
+        writer = PdfWriter()
+        writer.add_blank_page(width=200, height=200)
+        output = BytesIO()
+        writer.write(output)
+        return output.getvalue()
+
+    def test_parse_pdf_attachment(self):
+        client = IServClient()
+        pdf = self._blank_pdf()
+        client.download_attachment = MagicMock(return_value={
+            "data": pdf,
+            "filename": "brief.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": len(pdf),
+        })
+
+        result = client.parse_pdf_attachment("/iserv/attachment/brief.pdf")
+
+        assert result["filename"] == "brief.pdf"
+        assert result["page_count"] == 1
+        assert result["parsed_pages"] == 1
+        assert result["pages"] == [{"page": 1, "text": ""}]
+        assert result["has_extractable_text"] is False
+        assert result["text_truncated"] is False
+
+    def test_rejects_non_pdf_content(self):
+        client = IServClient()
+        client.download_attachment = MagicMock(return_value={
+            "data": b"not a pdf",
+            "filename": "fake.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 9,
+        })
+
+        with pytest.raises(IServError, match="not a PDF"):
+            client.parse_pdf_attachment("/iserv/attachment/fake.pdf")

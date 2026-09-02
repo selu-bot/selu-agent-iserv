@@ -77,6 +77,21 @@ tools:
       required: []
     recommended_policy: allow
 
+  - name: parse_pdf_attachment
+    description: >-
+      Downloads a PDF attachment from a parent letter and extracts its text page by page.
+      Returns the filename, page count, page text, combined text, and truncation status.
+      The parser is bundled with the capability and needs no optional agent skill.
+    input_schema:
+      type: object
+      properties:
+        attachment_href:
+          type: string
+          description: The relative URL path of the PDF attachment from get_parent_letter
+      required:
+        - attachment_href
+    recommended_policy: allow
+
 network:
   mode: allowlist
   hosts:

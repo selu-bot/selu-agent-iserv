@@ -30,6 +30,7 @@ TOOL_HANDLERS = {
     "get_parent_letter",
     "confirm_parent_letter",
     "download_attachment",
+    "parse_pdf_attachment",
     "check_notifications",
 }
 
@@ -76,6 +77,12 @@ class CapabilityState:
                 if not attachment_href:
                     return {"error": "attachment_href is required"}
                 return self._download(attachment_href)
+
+            if tool_name == "parse_pdf_attachment":
+                attachment_href = args.get("attachment_href")
+                if not attachment_href:
+                    return {"error": "attachment_href is required"}
+                return self._client.parse_pdf_attachment(attachment_href)
 
             if tool_name == "check_notifications":
                 return self._client.get_notifications(

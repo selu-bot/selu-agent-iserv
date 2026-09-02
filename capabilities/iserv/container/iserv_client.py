@@ -3,17 +3,24 @@ from __future__ import annotations
 import logging
 import re
 import time
+from io import BytesIO
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://mags-greven.de"
 SESSION_MAX_AGE_SECONDS = 15 * 60
+MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+MAX_PDF_PAGES = 50
+MAX_PDF_TEXT_CHARS = 100_000
+DOWNLOAD_CHUNK_SIZE = 64 * 1024
 
 
 class IServError(RuntimeError):
@@ -82,7 +89,7 @@ class IServClient:
             raise AuthenticationError("Missing IServ credentials")
 
         self.session.cookies.clear()
-        logger.info("Authenticating to IServ as %s", self._credentials.username)
+        logger.info("Authenticating to configured IServ account")
 
         # GET the login page to pick up session cookies and check for CSRF token
         resp = self.session.get(f"{self._base_url}/iserv/auth/login", timeout=20)
@@ -316,26 +323,109 @@ class IServClient:
 
     def download_attachment(self, attachment_href: str) -> dict[str, Any]:
         self._ensure_auth()
-        url = (
-            attachment_href
-            if attachment_href.startswith("http")
-            else f"{self._base_url}{attachment_href}"
-        )
+        url = urljoin(f"{self._base_url}/", attachment_href)
+        if urlparse(url).netloc != urlparse(self._base_url).netloc:
+            raise IServError("Attachment URL must use the configured IServ host")
+
         resp = self.session.get(url, timeout=30, stream=True)
         resp.raise_for_status()
+
+        content_length = resp.headers.get("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_ATTACHMENT_BYTES:
+                    raise IServError(
+                        f"Attachment is too large ({content_length} bytes, max {MAX_ATTACHMENT_BYTES})"
+                    )
+            except ValueError:
+                pass
 
         content_disp = resp.headers.get("Content-Disposition", "")
         filename_match = re.search(r'filename[*]?=["\']?([^"\';\n]+)', content_disp)
         filename = filename_match.group(1).strip() if filename_match else url.split("/")[-1]
 
         mime_type = resp.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip()
-        data = resp.content
+        chunks: list[bytes] = []
+        size_bytes = 0
+        for chunk in resp.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+            if not chunk:
+                continue
+            size_bytes += len(chunk)
+            if size_bytes > MAX_ATTACHMENT_BYTES:
+                raise IServError(
+                    f"Attachment is too large (max {MAX_ATTACHMENT_BYTES} bytes)"
+                )
+            chunks.append(chunk)
+        data = b"".join(chunks)
 
         return {
             "data": data,
             "filename": filename,
             "mime_type": mime_type,
+            "size_bytes": size_bytes,
+        }
+
+    def parse_pdf_attachment(self, attachment_href: str) -> dict[str, Any]:
+        """Download and extract bounded text without relying on an agent skill."""
+        attachment = self.download_attachment(attachment_href)
+        data = attachment["data"]
+        mime_type = attachment["mime_type"].lower()
+        filename = attachment["filename"]
+
+        if len(data) > MAX_ATTACHMENT_BYTES:
+            raise IServError(
+                f"PDF is too large ({len(data)} bytes, max {MAX_ATTACHMENT_BYTES})"
+            )
+        if not data.startswith(b"%PDF-"):
+            raise IServError(
+                f"Attachment is not a PDF (filename={filename!r}, mime_type={mime_type!r})"
+            )
+
+        try:
+            reader = PdfReader(BytesIO(data), strict=False)
+            if reader.is_encrypted:
+                try:
+                    unlocked = reader.decrypt("")
+                except Exception as exc:
+                    raise IServError("PDF is encrypted and cannot be parsed") from exc
+                if not unlocked:
+                    raise IServError("PDF is encrypted and cannot be parsed")
+
+            total_pages = len(reader.pages)
+            parsed_pages = min(total_pages, MAX_PDF_PAGES)
+            page_texts: list[dict[str, Any]] = []
+            remaining_chars = MAX_PDF_TEXT_CHARS
+
+            for page_number, page in enumerate(reader.pages[:parsed_pages], start=1):
+                if remaining_chars <= 0:
+                    break
+                text = (page.extract_text() or "").strip()
+                if len(text) > remaining_chars:
+                    text = text[:remaining_chars]
+                remaining_chars -= len(text)
+                page_texts.append({"page": page_number, "text": text})
+        except IServError:
+            raise
+        except (PdfReadError, ValueError, TypeError, KeyError) as exc:
+            raise IServError(f"Could not parse PDF: {exc}") from exc
+
+        combined_text = "\n\n".join(
+            f"[Page {page['page']}]\n{page['text']}"
+            for page in page_texts
+            if page["text"]
+        )
+        text_truncated = total_pages > len(page_texts) or remaining_chars <= 0
+
+        return {
+            "filename": filename,
+            "mime_type": mime_type,
             "size_bytes": len(data),
+            "page_count": total_pages,
+            "parsed_pages": len(page_texts),
+            "pages": page_texts,
+            "text": combined_text,
+            "text_truncated": text_truncated,
+            "has_extractable_text": any(page["text"] for page in page_texts),
         }
 
     def get_notifications(self, limit: int = 20) -> dict[str, Any]:
