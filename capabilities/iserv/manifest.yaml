@@ -6,7 +6,8 @@ tools:
   - name: check_parent_letters
     description: >-
       Fetches the list of parent letters (Elternbriefe) from IServ.
-      Returns title, date, read status, confirmation requirement, and href for each letter.
+      Returns title, date, child, sender, read status, and href for each letter.
+      Confirmation requirements are determined only after opening a letter.
     input_schema:
       type: object
       properties:
@@ -25,7 +26,7 @@ tools:
   - name: get_parent_letter
     description: >-
       Retrieves the full content of a specific parent letter by its href.
-      Returns the letter body as text, attachment metadata, and whether a read confirmation is required.
+      Returns sanitized letter text, attachment metadata, and whether a read confirmation is required.
     input_schema:
       type: object
       properties:
@@ -67,7 +68,7 @@ tools:
   - name: check_notifications
     description: >-
       Fetches recent notifications from IServ.
-      Returns title, date, type, and read status for each notification.
+      Returns id, title, message, date, type (when provided), and read status for each notification.
     input_schema:
       type: object
       properties:
@@ -114,7 +115,7 @@ credentials:
     description: IServ account password
 
 resources:
-  max_memory_mb: 128
+  max_memory_mb: 256
   max_cpu_fraction: 0.5
   max_cpu_seconds: 30
   pids_limit: 64

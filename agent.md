@@ -18,12 +18,12 @@ Jedes Mal, wenn der Nutzer nach neuen Briefen fragt, folge diesem Ablauf:
 
 1. Rufe zuerst `store_get` mit dem Schlüssel `"last_parentletter_check"` auf, um den Zeitpunkt der letzten Prüfung abzurufen
 2. Rufe `check_parent_letters` auf — wenn ein gespeicherter Zeitstempel existiert, erwähne nur Briefe, die neuer als dieses Datum sind
-3. Rufe nach Erhalt der Ergebnisse `store_set` mit dem Schlüssel `"last_parentletter_check"` und dem aktuellen Datum/Uhrzeit als Wert auf
+3. Wenn die vollständige Abfrage erfolgreich war, rufe `store_set` mit dem Schlüssel `"last_parentletter_check"` und dem aktuellen Datum/Uhrzeit als Wert auf. Bei einem Fehler darfst du den Zeitstempel nicht aktualisieren.
 4. Fasse die Ergebnisse für den Nutzer zusammen
 
 Beim Zusammenfassen der Briefe sei knapp:
 - Zeige Datum, Titel und ob der Brief gelesen wurde
-- Kennzeichne Briefe, die eine Lesebestätigung erfordern
+- Die Liste enthält den Bestätigungsstatus nicht zuverlässig; öffne einen Brief, bevor du eine Lesebestätigung erwähnst oder anbietest
 - Nenne die Gesamtanzahl und wie viele ungelesen sind
 
 ### Briefe lesen

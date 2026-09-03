@@ -8,19 +8,14 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
-from pypdf import PdfWriter
-
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "capabilities", "iserv", "container"))
-
 from iserv_client import (
-    AuthenticationError,
     DEFAULT_BASE_URL,
+    SESSION_MAX_AGE_SECONDS,
+    AuthenticationError,
     IServClient,
     IServError,
-    SESSION_MAX_AGE_SECONDS,
 )
-
+from pypdf import PdfWriter
 
 # ---------------------------------------------------------------------------
 # HTML fixtures — matching real IServ HTML structure (2026)
@@ -197,6 +192,17 @@ class TestParseNotifications:
         assert n1["title"] == "Plan aktualisiert"
         assert n1["read"] is True
 
+    def test_empty_notifications_page_is_valid(self):
+        client = IServClient()
+        from bs4 import BeautifulSoup
+        client._get_page = MagicMock(return_value=BeautifulSoup(
+            "<html><head><title>Benachrichtigungen</title></head><body><ul></ul></body></html>",
+            "lxml",
+        ))
+        assert client.get_notifications() == {
+            "notifications": [], "total": 0, "limit": 20, "returned": 0, "has_more": False,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Session / auth tests
@@ -209,25 +215,25 @@ class TestSessionManagement:
 
     def test_authenticated_after_login_timestamp(self):
         client = IServClient()
-        client._authenticated_at = time.time()
+        client._authenticated_at = time.monotonic()
         assert client.is_authenticated() is True
 
     def test_session_expires_after_max_age(self):
         client = IServClient()
-        client._authenticated_at = time.time() - SESSION_MAX_AGE_SECONDS - 1
+        client._authenticated_at = time.monotonic() - SESSION_MAX_AGE_SECONDS - 1
         assert client.is_authenticated() is False
 
     def test_credential_change_clears_session(self):
         client = IServClient()
         client.set_credentials("user1", "pass1")
-        client._authenticated_at = time.time()
+        client._authenticated_at = time.monotonic()
         client.set_credentials("user2", "pass2")
         assert client._authenticated_at is None
 
     def test_same_credentials_keep_session(self):
         client = IServClient()
         client.set_credentials("user1", "pass1")
-        client._authenticated_at = time.time()
+        client._authenticated_at = time.monotonic()
         client.set_credentials("user1", "pass1")
         assert client._authenticated_at is not None
 
@@ -238,7 +244,7 @@ class TestSessionManagement:
 
     def test_set_base_url_normalizes_and_clears_session(self):
         client = IServClient()
-        client._authenticated_at = time.time()
+        client._authenticated_at = time.monotonic()
         client.set_base_url("schule.example.de/")
 
         assert client._base_url == "https://schule.example.de"
@@ -246,7 +252,7 @@ class TestSessionManagement:
 
     def test_set_same_base_url_keeps_session(self):
         client = IServClient()
-        client._authenticated_at = time.time()
+        client._authenticated_at = time.monotonic()
         client.set_base_url(DEFAULT_BASE_URL)
 
         assert client._authenticated_at is not None
@@ -256,40 +262,37 @@ class TestSessionManagement:
         with pytest.raises(IServError, match="Invalid ISERV_BASE_URL"):
             client.set_base_url("https:///broken")
 
-    def test_follows_iserv_meta_auth_redirect(self):
+    def test_set_base_url_requires_https_origin(self):
         client = IServClient()
-        bridge = requests.Response()
-        bridge.status_code = 200
-        bridge.url = "https://mags-greven.de/iserv/auth/auth"
-        bridge._content = (
-            b'<html><head><meta http-equiv="refresh" '
-            b'content="0;url=https://mags-greven.de/iserv/app/authentication/redirect?state=x&amp;code=y">'
-            b'</head></html>'
-        )
-        destination = requests.Response()
-        destination.status_code = 200
-        destination.url = "https://mags-greven.de/iserv/parentletter/parent/index"
-        destination._content = b"<html></html>"
-        client.session.get = MagicMock(return_value=destination)
+        with pytest.raises(IServError, match="HTTPS origin"):
+            client.set_base_url("http://schule.example.de")
 
-        result = client._follow_iserv_auth_redirect(bridge)
-
-        assert result is destination
-        requested_url = client.session.get.call_args.args[0]
-        assert requested_url.endswith("?state=x&code=y")
-
-    def test_rejects_cross_host_meta_auth_redirect(self):
+    def test_login_collects_form_fields_and_requires_session_cookie(self):
         client = IServClient()
-        bridge = requests.Response()
-        bridge.status_code = 200
-        bridge.url = "https://mags-greven.de/iserv/auth/auth"
-        bridge._content = (
-            b'<meta http-equiv="refresh" '
-            b'content="0;url=https://example.com/steal">'
-        )
+        client.set_credentials("parent@example", "secret")
+        login = requests.Response()
+        login.status_code, login.url = 200, "https://mags-greven.de/iserv/auth/login"
+        login.headers["Content-Type"] = "text/html"
+        login._content = b'<form><input name="_password"><input type="hidden" name="csrf" value="x"></form>'
+        login.raw = BytesIO(login.content)
+        home = requests.Response()
+        home.status_code, home.url = 200, "https://mags-greven.de/iserv/"
+        home.headers["Content-Type"] = "text/html"
+        home._content = b"<html>logged in</html>"
+        home.raw = BytesIO(home.content)
+        home.cookies.set("IServSession", "opaque-session")
+        responses = iter([login, home])
+        def request(*args, **kwargs):
+            response = next(responses)
+            client.session.cookies.update(response.cookies)
+            return response
+        client.session.request = request
 
-        with pytest.raises(AuthenticationError, match="different host"):
-            client._follow_iserv_auth_redirect(bridge)
+        client.login()
+
+        assert client.is_authenticated() is True
+        assert client.session.cookies.get("IServSession") == "opaque-session"
+
 
 
 class TestConfirmParentLetter:
@@ -300,7 +303,9 @@ class TestConfirmParentLetter:
         soup = BeautifulSoup(PARENT_LETTER_DETAIL_WITH_CONFIRM_HTML, "lxml")
         post_soup = BeautifulSoup("<html><body>OK</body></html>", "lxml")
 
-        client._get_page = MagicMock(return_value=soup)
+        verified = BeautifulSoup(PARENT_LETTER_DETAIL_WITH_CONFIRM_HTML, "lxml")
+        verified.select_one('button[confirmation-type]').decompose()
+        client._get_page = MagicMock(side_effect=[soup, verified])
         client._post_page = MagicMock(return_value=post_soup)
 
         result = client.confirm_parent_letter("/iserv/parentletter/parent/show/42")

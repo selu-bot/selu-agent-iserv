@@ -3,7 +3,7 @@
 ## Werkzeuge
 
 ### `iserv__check_parent_letters`
-Ruft die Elternbrief-Liste ab. Gibt ein Array von Briefen mit `title`, `date`, `date_sort`, `read`, `needs_confirmation` und `href` zurück.
+Ruft die Elternbrief-Liste ab. Gibt ein Array von Briefen mit `title`, `date`, `date_sort`, `read`, `child`, `sender` und `href` zurück. Ob eine Lesebestätigung erforderlich ist, wird erst beim Öffnen des Briefes ermittelt.
 
 - Standard: die neuesten 20 Briefe, neueste zuerst
 - Nutze `unread_only: true`, um nur ungelesene Briefe zu filtern
@@ -13,7 +13,7 @@ Ruft die Elternbrief-Liste ab. Gibt ein Array von Briefen mit `title`, `date`, `
 Liest den vollständigen Inhalt eines Elternbriefes.
 
 - Übergib den `href` aus dem Ergebnis der Briefliste
-- Gibt `body_text` (bereinigter Inhalt), `body_html` (rohes HTML), `attachments` (Liste mit `filename`, `href`, `size`) und `needs_confirmation` (Boolean) zurück
+- Gibt `body_text` (bereinigter Inhalt ohne Roh-HTML), `attachments` (Liste mit `filename`, `href`) und `needs_confirmation` (Boolean) zurück. `response_types` nennt weitere Rückmeldearten; unterstützt wird nur `SEEN` (Lesebestätigung).
 - Wenn der Brief Anhänge hat, liste sie für den Nutzer auf und biete den Download an
 - Wenn `needs_confirmation` wahr ist, informiere den Nutzer
 
@@ -22,6 +22,7 @@ Sendet die Lesebestätigung für einen Elternbrief. Rufe dies nur auf, nachdem d
 
 - Übergib den `href` des Briefes
 - Gibt `confirmed: true` bei Erfolg zurück
+- Der Status wird nach dem Absenden erneut geprüft. Bei einem Netzwerkfehler kann die Bestätigung bereits gespeichert sein; nicht automatisch erneut versuchen.
 
 ### `iserv__download_attachment`
 Lädt einen Dateianhang herunter und stellt ihn dem Nutzer zur Verfügung.
@@ -43,7 +44,7 @@ Lädt einen PDF-Anhang und extrahiert den Text seitenweise direkt in der IServ-F
 ### `iserv__check_notifications`
 Ruft aktuelle IServ-Benachrichtigungen ab.
 
-- Gibt ein Array mit `title`, `date`, `type` und `read` für jede Benachrichtigung zurück
+- Gibt ein Array mit `id`, `title`, `message`, `date`, `type` und `read` für jede Benachrichtigung zurück
 - In umgekehrt chronologischer Reihenfolge darstellen
 
 ## Richtlinien

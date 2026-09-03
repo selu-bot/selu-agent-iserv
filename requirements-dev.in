@@ -1,0 +1,5 @@
+-r capabilities/iserv/container/requirements-build.in
+pytest>=8,<10
+PyYAML>=6,<7
+jsonschema>=4,<5
+ruff>=0.13,<1
