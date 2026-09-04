@@ -34,6 +34,11 @@ ATTACHMENT_PREFIXES = (
     "/iserv/download/", "/iserv/attachment/",
 )
 CONFIRM_SELECTOR = 'form[name=form] button[name="form[submit]"][confirmation-type]'
+# IServ authenticates in two stages. The password POST only establishes the
+# identity-provider session (IServAuthSession) and lands on /iserv/auth/home;
+# the application session (IServSession) is created later, when the first app
+# page bounces through the /iserv/auth/auth bridge that _request() follows.
+SESSION_COOKIE_NAMES = frozenset({"IServSession", "IServAuthSession"})
 
 
 class IServError(RuntimeError):
@@ -261,7 +266,7 @@ class IServClient:
         response = self._request("POST", action, data=data)
         if (self._login_response(response)
                 or not urlsplit(response.url).path.startswith("/iserv/")
-                or not any(cookie.name == "IServSession" for cookie in self.session.cookies)):
+                or not any(cookie.name in SESSION_COOKIE_NAMES for cookie in self.session.cookies)):
             self._clear_auth()
             raise AuthenticationError("Login failed; check credentials or additional login requirements")
         self._authenticated_at = time.monotonic()

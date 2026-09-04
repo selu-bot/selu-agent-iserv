@@ -35,7 +35,7 @@ gRPC capability container
 
 ### Login and requests
 
-`IServClient` owns a session for one invocation. It first loads the IServ login page, preserves hidden form fields and CSRF values, submits the credentials, and requires an `IServSession` cookie before continuing. Expired sessions are re-authenticated once and the original request is retried only when it is safe to do so.
+`IServClient` owns a session for one invocation. It first loads the IServ login page, preserves hidden form fields and CSRF values, submits the credentials, and requires an IServ session cookie before continuing. IServ authenticates in two stages: the password submission only creates the identity-provider session (`IServAuthSession`) and lands on `/iserv/auth/home`; the application session (`IServSession`) is created when the first module page is redirected through the `/iserv/auth/auth` bridge, which the client follows automatically. Expired sessions are re-authenticated once and the original request is retried only when it is safe to do so.
 
 IServ is a web application, so the client consumes HTML pages and forms as well as HTTP responses. It follows only same-origin HTTPS redirects, rejects cross-host redirects and unexpected authentication bridges, validates the expected page structure, and applies response-size and timeout limits. A malformed page is an error; it is never converted into an empty inbox.
 
@@ -93,5 +93,18 @@ The GitHub Actions workflow runs these checks and builds the capability image. T
 ```bash
 docker build -t selu-cap-iserv:local capabilities/iserv/container
 ```
+
+To debug the container against a real IServ account, start it locally and call it over gRPC the same way Selu does. Credentials travel in `config_json` on each request, not in container environment variables:
+
+```bash
+docker run -d --rm --name iserv-cap -p 50051:50051 selu-cap-iserv:local
+python -m grpc_tools.protoc -Icapabilities/iserv/container --python_out=/tmp/pb --grpc_python_out=/tmp/pb capabilities/iserv/container/capability.proto
+# then, with /tmp/pb on sys.path, send an InvokeRequest with
+#   tool_name="check_parent_letters", args_json=b'{"limit": 3}',
+#   config_json=json.dumps({"USERNAME": ..., "PASSWORD": ..., "ISERV_BASE_URL": ...}).encode()
+docker logs iserv-cap
+```
+
+The container only logs tool names and sanitized error messages. For a hop-by-hop view of the login flow, run `IServClient.login()` directly from a local Python session with `requests.Session.request` wrapped to print method, path, status, `Location`, and `Set-Cookie` names.
 
 IServ is an external web application and may change its markup or authentication flow. The client is intentionally strict about those changes so an upstream change produces an actionable error instead of silently returning incorrect data.

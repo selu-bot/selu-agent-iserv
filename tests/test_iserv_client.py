@@ -293,6 +293,57 @@ class TestSessionManagement:
         assert client.is_authenticated() is True
         assert client.session.cookies.get("IServSession") == "opaque-session"
 
+    @staticmethod
+    def _login_pair(home_cookie: str | None):
+        login = requests.Response()
+        login.status_code, login.url = 200, "https://mags-greven.de/iserv/auth/login"
+        login.headers["Content-Type"] = "text/html"
+        login._content = b'<form><input name="_password"></form>'
+        login.raw = BytesIO(login.content)
+        # Real IServ (2026): the password POST 302s to /iserv/auth/home, which is
+        # a meta-refresh page carrying only the identity-provider cookie.
+        home = requests.Response()
+        home.status_code, home.url = 200, "https://mags-greven.de/iserv/auth/home"
+        home.headers["Content-Type"] = "text/html"
+        home._content = (b'<html><head><meta http-equiv="refresh" content="0;url=https://mags-greven.de/iserv">'
+                         b'</head><body></body></html>')
+        home.raw = BytesIO(home.content)
+        if home_cookie:
+            home.cookies.set(home_cookie, "opaque-session")
+        return login, home
+
+    def _run_login(self, client, responses):
+        responses = iter(responses)
+        def request(*args, **kwargs):
+            response = next(responses)
+            client.session.cookies.update(response.cookies)
+            return response
+        client.session.request = request
+        client.login()
+
+    def test_login_accepts_identity_provider_session_cookie(self):
+        client = IServClient()
+        client.set_credentials("parent@example", "secret")
+
+        self._run_login(client, self._login_pair("IServAuthSession"))
+
+        assert client.is_authenticated() is True
+
+    def test_login_without_any_session_cookie_fails(self):
+        client = IServClient()
+        client.set_credentials("parent@example", "secret")
+
+        with pytest.raises(AuthenticationError, match="Login failed"):
+            self._run_login(client, self._login_pair(None))
+        assert client.is_authenticated() is False
+
+    def test_login_rejects_unknown_cookie_name(self):
+        client = IServClient()
+        client.set_credentials("parent@example", "secret")
+
+        with pytest.raises(AuthenticationError, match="Login failed"):
+            self._run_login(client, self._login_pair("PHPSESSID"))
+
 
 
 class TestConfirmParentLetter:
